@@ -96,7 +96,8 @@ class Finding(BaseModel):
     @property
     def fingerprint(self) -> str:
         """Generate a deterministic fingerprint hash to prevent double-counting."""
-        raw = f"{self.id}|{self.analyzer}|{self.file_path or ''}|{self.line_number or ''}|{self.description}"
+        norm_desc = " ".join(self.description.strip().split())
+        raw = f"{self.id}|{self.file_path or ''}|{self.line_number or ''}|{norm_desc}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
     def __hash__(self) -> int:

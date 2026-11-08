@@ -11,7 +11,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from repoguard.config import RepoGuardConfig
-from repoguard.core.context import ScanContext
+from repoguard.core.context import GitMetadata, ScanContext
 from repoguard.core.findings import Category, Finding, Severity
 from repoguard.core.registry import AnalyzerRegistry
 from repoguard.core.registry import registry as default_registry
@@ -38,6 +38,7 @@ class ScanResult(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     analyzer_results: dict[str, AnalyzerExecutionResult] = Field(default_factory=dict)
     score: HealthScore | None = None
+    git: GitMetadata | None = None
     config: RepoGuardConfig = Field(default_factory=RepoGuardConfig)
 
     @property
@@ -201,5 +202,6 @@ class RepoScanner:
             findings=sorted_findings,
             analyzer_results=execution_results,
             score=health_score,
+            git=self.context.git_metadata,
             config=self.config,
         )

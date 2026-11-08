@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import fnmatch
 from pathlib import Path
+
+from pydantic import BaseModel, Field
 
 from repoguard.config import RepoGuardConfig
 from repoguard.utils.filesystem import (
@@ -12,6 +15,19 @@ from repoguard.utils.filesystem import (
     read_text_safe,
     safe_resolve_path,
 )
+
+
+class GitMetadata(BaseModel):
+    """Git repository metadata extracted via GitPython."""
+
+    is_git_repo: bool = False
+    branch: str | None = None
+    commit_sha: str | None = None
+    commit_message: str | None = None
+    author: str | None = None
+    is_dirty: bool = False
+    remote_url: str | None = None
+    total_commits: int = Field(default=0, ge=0)
 
 
 class ScanContext:
@@ -34,6 +50,7 @@ class ScanContext:
 
         # Initialize Git integration safely if git directory exists
         self._git_repo = None
+        self._git_metadata = GitMetadata()
         self._init_git()
 
         # Cached file collection respecting exclusions
@@ -45,14 +62,64 @@ class ScanContext:
             import git
 
             if (self.repo_root / ".git").is_dir():
-                self._git_repo = git.Repo(self.repo_root)
+                repo = git.Repo(self.repo_root)
+                self._git_repo = repo
+
+                # Extract Git metadata safely
+                branch_name = None
+                try:
+                    branch_name = repo.active_branch.name
+                except TypeError:
+                    branch_name = "detached HEAD"
+                except Exception:
+                    pass
+
+                commit_sha = None
+                commit_msg = None
+                author_name = None
+                total_commits = 0
+                try:
+                    head_commit = repo.head.commit
+                    commit_sha = head_commit.hexsha[:8]
+                    commit_msg = head_commit.message.strip().split("\n")[0]
+                    author_name = head_commit.author.name
+                    # Fast commit count estimation
+                    total_commits = sum(1 for _ in repo.iter_commits(max_count=100))
+                except Exception:
+                    pass
+
+                remote_url = None
+                with contextlib.suppress(Exception):
+                    if repo.remotes:
+                        remote_url = repo.remotes[0].url
+
+                is_dirty = False
+                with contextlib.suppress(Exception):
+                    is_dirty = repo.is_dirty()
+
+                self._git_metadata = GitMetadata(
+                    is_git_repo=True,
+                    branch=branch_name,
+                    commit_sha=commit_sha,
+                    commit_message=commit_msg,
+                    author=author_name,
+                    is_dirty=is_dirty,
+                    remote_url=remote_url,
+                    total_commits=total_commits,
+                )
         except Exception:
             self._git_repo = None
+            self._git_metadata = GitMetadata()
 
     @property
     def git_repo(self):
         """GitPython Repo instance, or None if not a valid git repository."""
         return self._git_repo
+
+    @property
+    def git_metadata(self) -> GitMetadata:
+        """Structured Git repository metadata."""
+        return self._git_metadata
 
     @property
     def is_git_repo(self) -> bool:
