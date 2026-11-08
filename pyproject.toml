@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "Repoguard_1"
+name = "repoguard-tool"
 version = "0.1.0"
 description = "Analyze. Detect. Improve. Open-Source Repository Health Analyzer"
 readme = "README.md"

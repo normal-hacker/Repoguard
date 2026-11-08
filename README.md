@@ -42,13 +42,13 @@ RepoGuard scans codebases to evaluate documentation completeness, dependency sec
 Requires **Python 3.11+**.
 
 ```bash
-pip install repoguard
+pip install repoguard-tool
 ```
 
 Or using `pipx` for isolated CLI execution:
 
 ```bash
-pipx install repoguard
+pipx install repoguard-tool
 ```
 
 ---
