@@ -13,6 +13,7 @@ from repoguard.plugins.base import BaseAnalyzer
 from repoguard.core.context import ScanContext
 from repoguard.core.findings import Category, Finding, Severity
 
+
 class MyCustomAnalyzer(BaseAnalyzer):
     name = "custom_check"
     description = "Checks custom architectural rules"
