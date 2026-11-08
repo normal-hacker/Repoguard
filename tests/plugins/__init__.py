@@ -1,0 +1,1 @@
+"""Plugin tests for RepoGuard."""

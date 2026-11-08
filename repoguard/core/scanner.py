@@ -98,6 +98,15 @@ class RepoScanner:
         self.repo_root = repo_root.resolve()
         self.config = config or RepoGuardConfig.load(repo_root=self.repo_root)
         self.registry = analyzer_registry or default_registry
+
+        # Discover and load external plugins via entry points
+        try:
+            from repoguard.plugins.manager import PluginManager
+
+            PluginManager(self.registry).load_plugins(self.config)
+        except Exception:
+            pass
+
         self.context = ScanContext(repo_root=self.repo_root, config=self.config)
 
     def run(

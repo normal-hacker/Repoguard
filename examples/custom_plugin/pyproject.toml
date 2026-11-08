@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "repoguard-docker-plugin"
+version = "0.1.0"
+description = "Example RepoGuard plugin analyzing Dockerfiles for container security antipatterns"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "RepoGuard Community" }]
+dependencies = [
+    "repoguard>=0.1.0",
+]
+
+[project.entry-points."repoguard.plugins"]
+docker = "repoguard_docker_analyzer.analyzer:DockerAnalyzer"
+
+[tool.hatch.build.targets.wheel]
+packages = ["repoguard_docker_analyzer"]
