@@ -68,16 +68,20 @@ def test_cli_scan_basic(cli_runner: CliRunner, temp_repo: Path) -> None:
     # On an empty repo, high findings (missing README/tests) trigger exit code 1 under default thresholds
     result = cli_runner.invoke(app, ["scan", str(temp_repo)])
     assert result.exit_code == 1
-    assert "RepoGuard Scan Summary" in result.output
+    assert "RepoGuard Health Assessment" in result.output
+    assert "Category Breakdown" in result.output
     assert "Detected Findings" in result.output
     assert "DOC001" in result.output
 
 
 def test_cli_scan_passing_with_relaxed_threshold(cli_runner: CliRunner, temp_repo: Path) -> None:
-    # When fail-on is set to critical, high findings do not trigger failure
-    result = cli_runner.invoke(app, ["scan", str(temp_repo), "--fail-on", "critical"])
+    # When fail-on is set to critical and min-score is 0, high findings do not trigger failure
+    result = cli_runner.invoke(
+        app, ["scan", str(temp_repo), "--fail-on", "critical", "--min-score", "0"]
+    )
     assert result.exit_code == 0
-    assert "RepoGuard Scan Summary" in result.output
+    assert "RepoGuard Health Assessment" in result.output
+    assert "Category Breakdown" in result.output
 
 
 def test_cli_scan_with_options(cli_runner: CliRunner, temp_repo: Path) -> None:
