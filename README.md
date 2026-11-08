@@ -39,16 +39,58 @@ RepoGuard scans codebases to evaluate documentation completeness, dependency sec
 
 ## Installation
 
-Requires **Python 3.11+**.
+RepoGuard requires **Python 3.11 or later**. The recommended installation method on all platforms is **pipx**, which installs command-line applications in isolated environments.
 
-```bash
-pip install repoguard-tool
-```
+### Windows
 
-Or using `pipx` for isolated CLI execution:
+1. Install Python 3.11 or later from [python.org](https://www.python.org/downloads/windows/). During setup, enable **Add Python to PATH**.
+2. Open Command Prompt or PowerShell and verify Python:
+
+   ```cmd
+   py --version
+   ```
+
+3. Install pipx:
+
+   ```cmd
+   py -m pip install --user pipx
+   ```
+
+4. Add pipx to PATH:
+
+   ```cmd
+   py -m pipx ensurepath
+   ```
+
+   Close and reopen the terminal after this step.
+
+5. Install RepoGuard:
+
+   ```cmd
+   py -m pipx install repoguard-tool
+   ```
+
+6. Verify the installation:
+
+   ```cmd
+   repoguard version
+   repoguard --help
+   ```
+
+### macOS and Linux
+
+Install pipx using the instructions for your operating system at [pipx.pypa.io](https://pipx.pypa.io/stable/installation/), then run:
 
 ```bash
 pipx install repoguard-tool
+```
+
+### Uninstall
+
+To remove RepoGuard:
+
+```bash
+pipx uninstall repoguard-tool
 ```
 
 ---
