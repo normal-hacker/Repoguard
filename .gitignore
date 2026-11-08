@@ -39,6 +39,12 @@ env/
 htmlcov/
 .mypy_cache/
 
+# Scan report outputs
+*.report.json
+report.json
+repoguard-report.json
+repoguard-summary.md
+
 # OS artifacts
 .DS_Store
 Thumbs.db
