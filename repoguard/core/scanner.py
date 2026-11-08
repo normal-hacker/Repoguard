@@ -85,6 +85,9 @@ class RepoScanner:
         config: RepoGuardConfig | None = None,
         analyzer_registry: AnalyzerRegistry | None = None,
     ) -> None:
+        # Ensure built-in analyzers are loaded into default registry
+        import repoguard.analyzers  # noqa: F401
+
         self.repo_root = repo_root.resolve()
         self.config = config or RepoGuardConfig.load(repo_root=self.repo_root)
         self.registry = analyzer_registry or default_registry
