@@ -15,6 +15,7 @@ from repoguard.core.context import ScanContext
 from repoguard.core.findings import Category, Finding, Severity
 from repoguard.core.registry import AnalyzerRegistry
 from repoguard.core.registry import registry as default_registry
+from repoguard.core.scoring import HealthScore
 
 
 class AnalyzerExecutionResult(BaseModel):
@@ -36,6 +37,7 @@ class ScanResult(BaseModel):
     duration_seconds: float = 0.0
     findings: list[Finding] = Field(default_factory=list)
     analyzer_results: dict[str, AnalyzerExecutionResult] = Field(default_factory=dict)
+    score: HealthScore | None = None
     config: RepoGuardConfig = Field(default_factory=RepoGuardConfig)
 
     @property
@@ -68,6 +70,11 @@ class ScanResult(BaseModel):
             0: Scan passed all threshold checks
             1: Threshold exceeded (e.g. high/critical findings or score below minimum)
         """
+        # Check minimum score threshold
+        min_score = self.config.thresholds.min_score
+        if self.score and self.score.overall_score < min_score:
+            return 1
+
         # Check fail-on severity threshold
         fail_sev = self.config.thresholds.fail_on_severity
         if fail_sev and self.has_severity(fail_sev):
@@ -173,10 +180,17 @@ class RepoScanner:
             reverse=True,
         )
 
+        health_score = HealthScore.calculate(
+            findings=sorted_findings,
+            analyzer_results=execution_results,
+            config=self.config,
+        )
+
         return ScanResult(
             repo_root=str(self.repo_root),
             duration_seconds=total_duration,
             findings=sorted_findings,
             analyzer_results=execution_results,
+            score=health_score,
             config=self.config,
         )
