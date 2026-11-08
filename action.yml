@@ -1,0 +1,152 @@
+name: "RepoGuard Health Analyzer"
+description: "Automated repository health, security, dependency, and code quality analyzer"
+author: "RepoGuard Contributors"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  path:
+    description: "Path to repository or directory to analyze"
+    required: false
+    default: "."
+  min-score:
+    description: "Minimum overall health score required (0-100)"
+    required: false
+    default: "70"
+  fail-on:
+    description: "Fail if findings meet or exceed severity (critical, high, medium, low)"
+    required: false
+    default: "high"
+  no-network:
+    description: "Disable external network calls (registry lookups, OSV API)"
+    required: false
+    default: "false"
+  output-json:
+    description: "Filename for machine-readable JSON report"
+    required: false
+    default: "repoguard-report.json"
+  output-markdown:
+    description: "Filename for Markdown summary report"
+    required: false
+    default: "repoguard-summary.md"
+  python-version:
+    description: "Python version to execute RepoGuard"
+    required: false
+    default: "3.11"
+
+outputs:
+  score:
+    description: "Overall repository health score (0-100)"
+    value: ${{ steps.scan.outputs.score }}
+  grade:
+    description: "Overall letter grade (A, B, C, D, F)"
+    value: ${{ steps.scan.outputs.grade }}
+  findings-count:
+    description: "Total number of findings detected"
+    value: ${{ steps.scan.outputs.findings_count }}
+  report-path:
+    description: "Path to generated JSON report"
+    value: ${{ steps.scan.outputs.report_path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install RepoGuard
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        # If running in RepoGuard repo, install local package; otherwise install from pip
+        if [ -f "pyproject.toml" ] && grep -q 'name = "repoguard"' pyproject.toml; then
+          pip install .
+        else
+          pip install repoguard
+        fi
+
+    - name: Run RepoGuard Analysis
+      id: scan
+      shell: bash
+      run: |
+        EXTRA_FLAGS=""
+        if [ "${{ inputs.no-network }}" = "true" ]; then
+          EXTRA_FLAGS="$EXTRA_FLAGS --no-network"
+        fi
+        if [ -n "${{ inputs.min-score }}" ]; then
+          EXTRA_FLAGS="$EXTRA_FLAGS --min-score ${{ inputs.min-score }}"
+        fi
+        if [ -n "${{ inputs.fail-on }}" ]; then
+          EXTRA_FLAGS="$EXTRA_FLAGS --fail-on ${{ inputs.fail-on }}"
+        fi
+
+        # Generate JSON report
+        repoguard scan "${{ inputs.path }}" --format json --output "${{ inputs.output-json }}" $EXTRA_FLAGS || SCAN_EXIT=$?
+        SCAN_EXIT=${SCAN_EXIT:-0}
+
+        # Generate Markdown summary
+        repoguard scan "${{ inputs.path }}" --format markdown --output "${{ inputs.output-markdown }}" $EXTRA_FLAGS > /dev/null 2>&1 || true
+
+        # Write to GitHub Step Summary
+        if [ -f "${{ inputs.output-markdown }}" ] && [ -n "$GITHUB_STEP_SUMMARY" ]; then
+          cat "${{ inputs.output-markdown }}" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        # Extract outputs and PR annotations using Python
+        python - << 'EOF'
+        import json, os, sys
+
+        report_file = "${{ inputs.output-json }}"
+        if os.path.isfile(report_file):
+            try:
+                with open(report_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                score_val = str(data.get("score", {}).get("overall_score", 0))
+                grade_val = str(data.get("score", {}).get("grade", "F"))
+                findings = data.get("findings", [])
+                count_val = str(len(findings))
+
+                output_env = os.environ.get("GITHUB_OUTPUT")
+                if output_env:
+                    with open(output_env, "a", encoding="utf-8") as out:
+                        out.write(f"score={score_val}\n")
+                        out.write(f"grade={grade_val}\n")
+                        out.write(f"findings_count={count_val}\n")
+                        out.write(f"report_path={report_file}\n")
+
+                # Emit GitHub Actions PR annotations
+                for f in findings:
+                    sev = f.get("severity", "low")
+                    cmd = "error" if sev in ["critical", "high"] else "warning"
+                    file_p = f.get("file_path") or ""
+                    line_n = f.get("line_number")
+                    desc = f.get("description", "").replace("\n", " ")
+                    rule_id = f.get("id", "")
+                    
+                    loc_parts = []
+                    if file_p:
+                        loc_parts.append(f"file={file_p}")
+                    if line_n:
+                        loc_parts.append(f"line={line_n}")
+                    loc_str = f" {','.join(loc_parts)}" if loc_parts else ""
+
+                    print(f"::{cmd}{loc_str}::[{rule_id}] {desc}")
+            except Exception as e:
+                print(f"::warning::Failed to parse RepoGuard output: {e}")
+        EOF
+
+        # Exit with original scan status
+        exit $SCAN_EXIT
+
+    - name: Upload RepoGuard Report Artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: repoguard-report
+        path: |
+          ${{ inputs.output-json }}
+          ${{ inputs.output-markdown }}
+        if-no-files-found: ignore

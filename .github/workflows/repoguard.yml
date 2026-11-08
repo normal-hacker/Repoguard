@@ -1,0 +1,29 @@
+name: RepoGuard Health Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  repoguard:
+    name: RepoGuard Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Execute RepoGuard Health Scan
+        uses: ./
+        with:
+          min-score: "70"
+          fail-on: "critical"
+          no-network: "false"
+          output-json: "repoguard-report.json"
+          output-markdown: "repoguard-summary.md"
