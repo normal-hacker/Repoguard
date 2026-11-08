@@ -67,8 +67,8 @@ def test_cli_plugins_info_missing(cli_runner: CliRunner) -> None:
 def test_cli_scan_basic(cli_runner: CliRunner, temp_repo: Path) -> None:
     result = cli_runner.invoke(app, ["scan", str(temp_repo)])
     assert result.exit_code == 0
-    assert "RepoGuard Engine Ready" in result.output
-    assert "Target Repository" in result.output
+    assert "RepoGuard Scan Summary" in result.output
+    assert "Scan Completed Successfully" in result.output
 
 
 def test_cli_scan_with_options(cli_runner: CliRunner, temp_repo: Path) -> None:
@@ -87,6 +87,6 @@ def test_cli_scan_with_options(cli_runner: CliRunner, temp_repo: Path) -> None:
         ],
     )
     assert result.exit_code == 0
-    assert "Disabled (Offline Mode)" in result.output
-    assert "1 custom patterns" in result.output
-    assert "json" in result.output
+    assert '"enabled": false' in result.output
+    assert '"legacy/*"' in result.output
+    assert '"min_score": 80.0' in result.output

@@ -277,26 +277,127 @@ def scan_command(
     if fail_on is not None:
         cfg.thresholds.fail_on_severity = fail_on  # type: ignore
 
-    # In Stage 1, we verify configuration and scan readiness
-    try:
-        from repoguard.core.scanner import RepoScanner
+    # Execute scanning engine
+    from repoguard.core.scanner import RepoScanner
 
+    with console.status("[bold green]Scanning repository...[/]", spinner="dots"):
         scanner = RepoScanner(repo_root=resolved_target, config=cfg)
         result = scanner.run()
-        # Reporters will be wired in Stages 5 & 6
-        exit_code = result.exit_code
-        raise typer.Exit(code=exit_code)
-    except (ImportError, ModuleNotFoundError):
-        # Stage 1 foundation: scanner engine will be implemented in Stage 2
-        console.print(
-            Panel(
-                f"[bold green]RepoGuard v{__version__}[/] Foundation Initialized\n\n"
-                f"Target Repository: [cyan]{resolved_target}[/]\n"
-                f"Network Access: [yellow]{'Enabled' if cfg.network.enabled else 'Disabled (Offline Mode)'}[/]\n"
-                f"Exclusions configured: [blue]{len(cfg.exclusions)} custom patterns[/]\n"
-                f"Output Format: [magenta]{format.value}[/]",
-                title="RepoGuard Engine Ready",
-                border_style="green",
+
+    # Format output
+    if format == OutputFormat.JSON:
+        output_content = result.model_dump_json(indent=2)
+        if output:
+            output.write_text(output_content, encoding="utf-8")
+            console.print(f"[bold green]Report written to:[/] {output}")
+        else:
+            console.print(output_content)
+    elif format == OutputFormat.MARKDOWN:
+        lines = [
+            "# RepoGuard Scan Report",
+            "",
+            f"- **Target**: `{result.repo_root}`",
+            f"- **Duration**: {result.duration_seconds:.2f}s",
+            f"- **Total Findings**: {result.total_findings}",
+            f"- **Timestamp**: {result.timestamp.isoformat()}",
+            "",
+            "## Analyzer Summary",
+            "",
+            "| Analyzer | Category | Status | Findings | Duration |",
+            "|---|---|---|---|---|",
+        ]
+        for a_res in result.analyzer_results.values():
+            lines.append(
+                f"| {a_res.name} | {a_res.category} | {a_res.status} | {a_res.findings_count} | {a_res.duration_seconds:.3f}s |"
             )
+        if not result.analyzer_results:
+            lines.append("| *None* | - | - | - | - |")
+        lines.append("")
+        lines.append("## Findings")
+        lines.append("")
+        if not result.findings:
+            lines.append("No issues detected.")
+        else:
+            for f in result.findings:
+                lines.append(f"### [{f.severity.upper()}] {f.id}: {f.description}")
+                lines.append(f"- **Category**: {f.category.value}")
+                lines.append(
+                    f"- **File**: `{f.file_path or 'N/A'}` (line {f.line_number or 'N/A'})"
+                )
+                lines.append(f"- **Remediation**: {f.remediation}")
+                lines.append("")
+        markdown_content = "\n".join(lines)
+        if output:
+            output.write_text(markdown_content, encoding="utf-8")
+            console.print(f"[bold green]Report written to:[/] {output}")
+        else:
+            console.print(markdown_content)
+    else:
+        # Rich Terminal Output
+        table = Table(
+            title=f"RepoGuard Scan Summary (Duration: {result.duration_seconds:.2f}s)",
+            show_header=True,
+            header_style="bold blue",
         )
-        raise typer.Exit(code=0) from None
+        table.add_column("Analyzer", style="cyan")
+        table.add_column("Category", style="yellow")
+        table.add_column("Status", style="green")
+        table.add_column("Findings", justify="right")
+        table.add_column("Duration", justify="right")
+
+        if not result.analyzer_results:
+            table.add_row("No analyzers registered", "-", "-", "0", "0.00s")
+        else:
+            for a_res in result.analyzer_results.values():
+                status_style = (
+                    "green"
+                    if a_res.status == "success"
+                    else ("yellow" if a_res.status == "skipped" else "red")
+                )
+                table.add_row(
+                    a_res.name,
+                    a_res.category,
+                    f"[{status_style}]{a_res.status}[/]",
+                    str(a_res.findings_count),
+                    f"{a_res.duration_seconds:.3f}s",
+                )
+        console.print(table)
+
+        if result.findings:
+            findings_table = Table(
+                title="Detected Findings", show_header=True, header_style="bold red"
+            )
+            findings_table.add_column("ID", style="bold cyan", width=10)
+            findings_table.add_column("Severity", style="magenta", width=10)
+            findings_table.add_column("Category", style="yellow", width=14)
+            findings_table.add_column("File:Line", style="white", width=25)
+            findings_table.add_column("Description", style="white")
+
+            for f in result.findings:
+                loc = f"{f.file_path or 'repo'}"
+                if f.line_number:
+                    loc = f"{loc}:{f.line_number}"
+                findings_table.add_row(
+                    f.id,
+                    f.severity.value.upper(),
+                    f.category.value,
+                    loc,
+                    f.description,
+                )
+            console.print(findings_table)
+        else:
+            console.print(
+                Panel(
+                    f"Repository: [cyan]{result.repo_root}[/]\n"
+                    f"Total files checked: [blue]{len(scanner.context.files)}[/]\n"
+                    f"Findings: [green]0 issues detected[/]",
+                    title="[bold green]Scan Completed Successfully[/]",
+                    border_style="green",
+                )
+            )
+
+        if output:
+            output.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+            console.print(f"[bold green]Raw JSON report written to:[/] {output}")
+
+    raise typer.Exit(code=result.exit_code)
